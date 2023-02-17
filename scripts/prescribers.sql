@@ -45,7 +45,7 @@ INNER JOIN drug as d
 	USING(drug_name)
 WHERE d.opioid_drug_flag='Y'
 GROUP BY p.specialty_description
-ORDER BY total_claims DESC;
+ORDER BY opioid_claims DESC;
 
 -- Nurse Practitioner 
 
@@ -67,66 +67,75 @@ ORDER BY specialty_description;
 
 --     d. **Difficult Bonus:** *Do not attempt until you have solved all other problems!* For each specialty, report the percentage of total claims by that specialty which are for opioids. Which specialties have a high percentage of opioids?
 
-SELECT 
-	p.specialty_description, 
-	CONCAT((ROUND((SELECT SUM(p2.total_claim_count)
-	FROM prescriber as p
-	LEFT JOIN prescriber as p1
-	USING (npi)
-	LEFT JOIN prescription as p2
-	USING (npi)
-	LEFT JOIN drug as d
-	on p2.drug_name = d.drug_name
-		WHERE d.opioid_drug_flag = 'Y'
-	   AND p1.npi = p2.npi)/(SELECT SUM(p2.total_claim_count)
-	FROM prescriber as p
-	LEFT JOIN prescriber as p1
-	USING (npi)
-	LEFT JOIN prescription as p2
-	USING (npi)
-		WHERE p1.npi = p.npi),2)*100),' %') as 					opioid_claims_pct
+
+WITH cte as (SELECT p.specialty_description, p2.npi, p2.total_claim_count, d.opioid_drug_flag
+			FROM prescription as p2
+			LEFT JOIN drug as p1
+			USING(npi)
+			LEFT JOIN prescription as p2
+			ON p.npi =p2.npi AND p2.drug_name=d.drug_name
+			LEFT JOIN drug as d
+			USING (drug_name)
+			WHERE opioid_drug_flag = 'Y')
+
+SELECT p.specialty_description,
+	SUM(p1.total_claim_count) as total_claims,
+	SUM(cte.total_claim_count) as opioid_claims,
+	(SUM(cte.total_claim_count)/SUM(p1.total_claim_count)) as opioid_pct
 FROM prescriber as p
-LEFT JOIN prescriber as p1
-	USING (npi)
-LEFT JOIN prescription as p2
-	USING (npi)
+LEFT JOIN prescription as p1
+	USING(npi)
+LEFT JOIN cte
+USING(npi)
 GROUP BY p.specialty_description
-ORDER BY opioid_claims_pct DESC;
-
-WITH a AS (SELECT p.npi, p.total_claim_count, d.opioid_drug_flag
-		  FROM prescription as p
-		  LEFT JOIN drug as d
-		  USING(drug_name))
-
-SELECT p.specialty_description, SUM(p2.total_claim_count) as total,
-	(SELECT SUM(total_claim_count)
-	 FROM a
-	 WHERE opioid_drug_flag = 'Y' AND a.npi = p.specialty_description) as opioid
-FROM prescriber as p
-LEFT JOIN prescriber as p1
-	USING (npi)
-LEFT JOIN prescription as p2
-	USING (npi)
-GROUP BY p.specialty_description
-
-		   
-														
+ORDER BY p.specialty_description DESC;
 
 
-SELECT p.specialty_description, SUM(p1.total_claim_count) as total_claims, 
-((SELECT SUM(total_claim_count)
-	FROM prescription as psub
-	LEFT JOIN drug as d
-	ON psub.drug_name=d.drug_name
- WHERE p.specialty_description=psub.specialty_description)) as opioid_claims
+
+WITH cte as (SELECT p.specialty_description, p2.npi, p2.total_claim_count, d.opioid_drug_flag
+			FROM prescriber as p
+			JOIN prescriber as p1
+			USING(npi)
+			LEFT JOIN prescription as p2
+			ON p.npi =p2.npi AND p2.drug_name=d.drug_name
+			LEFT JOIN drug as d
+			USING (drug_name)
+			WHERE opioid_drug_flag = 'Y')
+
+
+SELECT p.specialty_description, 
+SUM(p1.total_claim_count) as total_claims,
+(SELECT SUM(total_claim_count)
+	FROM 
+ 		(SELECT npi,total_claim_count, opioid_drug_flag
+		FROM prescriber as p
+		LEFT JOIN prescriber as p1
+			USING(npi)
+		LEFT JOIN prescription as p2
+			USING (npi)
+		LEFT JOIN drug as d
+			USING (drug_name)
+		WHERE p2.npi=p.npi)as subq
+	WHERE opioid_drug_flag = 'Y') as opioid_total		
 FROM prescriber as p
 INNER JOIN prescription as p1
 	USING(npi)
 INNER JOIN drug as d
 	USING(drug_name)
 GROUP BY p.specialty_description
-ORDER BY total_claims DESC;
+ORDER BY p.specialty_description DESC;
 
+-- cte to get total opioid by specialty. try a case statement too 
+
+SELECT npi,total_claim_count, opioid_drug_flag
+FROM prescriber as p
+LEFT JOIN prescriber as p1
+USING(npi)
+LEFT JOIN prescription as p2
+USING (npi)
+LEFT JOIN drug as d
+USING (drug_name)
+WHERE opioid_drug_flag = 'Y'
 -- 3. 
 --     a. Which drug (generic_name) had the highest total drug cost?
 
@@ -292,9 +301,9 @@ ORDER BY p1.npi;
 SELECT p1.npi, 
 	d.drug_name,
 	(SELECT p2.total_claim_count
-	FROM prescription as p2
-	WHERE p1.npi=p2.npi
-	AND p2.drug_name=d.drug_name)as total_count
+		FROM prescription as p2
+		WHERE p1.npi=p2.npi
+		AND p2.drug_name=d.drug_name) as total_count
 FROM prescriber as p1
 CROSS JOIN drug as d
 WHERE p1.specialty_description = 'Pain Management'
@@ -328,14 +337,13 @@ SELECT p1.npi,
 	COALESCE(p2.total_claim_count,0) as total_count
 FROM prescriber as p1
 CROSS JOIN drug as d
-INNER JOIN prescription as p2
-ON p1.npi=p2.npi
+LEFT JOIN prescription as p2
+ON d.drug_name = p2.drug_name AND p2.npi=p1.npi
 WHERE p1.specialty_description = 'Pain Management'
 	AND p1.nppes_provider_city = 'NASHVILLE'
 	AND d.opioid_drug_flag = 'Y'
-	AND p1.npi=p2.npi
-	AND p2.drug_name=d.drug_name
 ORDER BY total_count DESC;
 
+-- Much better 
 
 
