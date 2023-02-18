@@ -312,12 +312,19 @@ FROM prescriber)-
 FROM prescription)
 
 --	4458
--- Look for another way to do this based on filters
+
+SELECT COUNT(npi)
+FROM (SELECT npi
+	 FROM prescriber
+	 EXCEPT
+	 SELECT npi
+	 FROM prescription) as sub
 
 -- 2.
 --     a. Find the top five drugs (generic_name) prescribed by prescribers with the specialty of Family Practice.
 
-SELECT generic_name, SUM(total_claim_count) as total_claims
+SELECT generic_name, 
+	SUM(total_claim_count) as total_claims
 FROM (SELECT npi
 	 FROM prescriber
 	 WHERE specialty_description = 'Family Practice') as sub
@@ -416,17 +423,17 @@ ORDER BY deaths DESC;
 SELECT SUM(population)
 FROM population
 INNER JOIN fips_county
-USING(fipscounty)
+	USING(fipscounty)
 WHERE state = 'TN'
     
 --     b. Build off of the query that you wrote in part a to write a query that returns for each county that county's name, its population, and the percentage of the total population of Tennessee that is contained in that county.
 
 SELECT county, population, 
 		CONCAT(ROUND(100*(population)/(SELECT SUM(population)
-		FROM population
-		INNER JOIN fips_county
-		USING(fipscounty)
-		WHERE state = 'TN'),2),' %') as pct_tn
+										FROM population
+										INNER JOIN fips_county
+										USING(fipscounty)
+										WHERE state = 'TN'),2),' %') as pct_tn
 FROM population
 INNER JOIN fips_county
 	USING(fipscounty)
