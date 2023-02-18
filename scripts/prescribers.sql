@@ -37,7 +37,8 @@ LIMIT 1;
 
 --     b. Which specialty had the most total number of claims for opioids?
 
-SELECT p.specialty_description, SUM(p1.total_claim_count) as opioid_claims
+SELECT p.specialty_description, 
+	SUM(p1.total_claim_count) as opioid_claims
 FROM prescriber as p
 INNER JOIN prescription as p1
 	USING(npi)
@@ -106,6 +107,14 @@ INNER JOIN prescription as p
 	USING(drug_name)
 ORDER BY total_drug_cost DESC;
 
+
+SELECT d.generic_name, SUM(p.total_drug_cost) as s
+FROM drug as d
+INNER JOIN prescription as p
+	USING(drug_name)
+GROUP BY generic_name
+ORDER BY s DESC;
+
 -- PIRFENIDONE
 
 --     b. Which drug (generic_name) has the hightest total cost per day? **Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.**
@@ -120,6 +129,7 @@ INNER JOIN prescription as p
 ORDER BY (total_drug_cost/total_day_supply) DESC;
 
 --	IMMUN GLOB(IGG)/GLY/IGA OVA50 at $7141.11 per day
+-- I'd argue that the phrasing of the question is asking for total cost per day for the drug, not the overall totals as presented in the walkthrough
 
 -- 4. 
 --     a. For each drug in the drug table, return the drug name and then a column named 'drug_type' which says 'opioid' for drugs which have opioid_drug_flag = 'Y', says 'antibiotic' for those drugs which have antibiotic_drug_flag = 'Y', and says 'neither' for all other drugs.
@@ -150,14 +160,14 @@ ORDER BY SUM(p.total_drug_cost) DESC;
 -- 5. 
 --     a. How many CBSAs are in Tennessee? **Warning:** The cbsa table contains information for all states, not just Tennessee.
 
-SELECT f.state, count(c.cbsa) as cbsa_count
+SELECT f.state, count(DISTINCT c.cbsa) as cbsa_count
 FROM fips_county as f
 INNER JOIN cbsa as c
 	USING (fipscounty)
 WHERE state = 'TN'
 GROUP BY f.state;
 
--- 42
+-- 10
 
 --     b. Which cbsa has the largest combined population? Which has the smallest? Report the CBSA name and total population.
 
