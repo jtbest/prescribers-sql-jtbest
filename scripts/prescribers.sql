@@ -10,7 +10,6 @@ ORDER BY total_claims DESC;
 
 --	1881634483 with 99707 claims
 
-
 --     b. Repeat the above, but this time report the nppes_provider_first_name, nppes_provider_last_org_name,  specialty_description, and the total number of claims.
 
 SELECT CONCAT(p.nppes_provider_last_org_name, ', ',p.nppes_provider_first_name),specialty_description, 
@@ -31,7 +30,8 @@ FROM prescriber as p
 INNER JOIN prescription as p1
 	USING(npi)
 GROUP BY p.specialty_description
-ORDER BY total_claims DESC;
+ORDER BY total_claims DESC
+LIMIT 1;
 
 -- Family Practice 
 
@@ -52,16 +52,22 @@ ORDER BY opioid_claims DESC;
 --     c. **Challenge Question:** Are there any specialties that appear in the prescriber table that have no associated prescriptions in the prescription table?
 
 SELECT 
-	p.specialty_description, 
-	SUM(total_claim_count) as all_claims
+	p.specialty_description
 FROM prescriber as p
-LEFT JOIN prescriber as p1
-	USING (npi)
 LEFT JOIN prescription as p2
 	USING (npi)
 GROUP BY p.specialty_description
 HAVING SUM(total_claim_count) IS NULL
 ORDER BY specialty_description;
+
+
+SELECT DISTINCT(specialty_description)
+FROM prescriber
+WHERE specialty_description NOT IN
+		(SELECT specialty_description
+		FROM prescriber
+		INNER JOIN prescription
+		USING (npi))
 
 -- Yes, 15 of them. 
 
@@ -75,19 +81,21 @@ WITH cte AS (SELECT specialty_description,
 	  LEFT JOIN drug as d
 	 	 USING (drug_name)
 	  WHERE d.opioid_drug_flag = 'Y'
-	 GROUP BY specialty_description)
+	  GROUP BY specialty_description)
 
 SELECT p.specialty_description, 
 	COALESCE(cte.opioid,0) as opioid_claims, 
 	COALESCE(SUM(p1.total_claim_count),0) as total_claims, 
-	CONCAT(ROUND(100*COALESCE(cte.opioid/SUM(p1.total_claim_count),0),2),' %') as opioid_pct
+	CONCAT(ROUND(100*COALESCE(cte.opioid/SUM(p1.total_claim_count),0),2),' %') 
+		as opioid_pct
 FROM prescriber as p
 LEFT JOIN prescription as p1
 	USING (npi)
 LEFT JOIN cte
 	USING (specialty_description)
 GROUP BY p.specialty_description, cte.opioid
-ORDER BY COALESCE(cte.opioid/SUM(p1.total_claim_count),0) DESC;
+ORDER BY COALESCE(cte.opioid/SUM(p1.total_claim_count),0)DESC, 
+		total_claims DESC;
 
 -- 3. 
 --     a. Which drug (generic_name) had the highest total drug cost?
@@ -102,10 +110,13 @@ ORDER BY total_drug_cost DESC;
 
 --     b. Which drug (generic_name) has the hightest total cost per day? **Bonus: Round your cost per day column to 2 decimal places. Google ROUND to see how this works.**
 
-SELECT d.generic_name, CONCAT('$ ',ROUND(p.total_drug_cost,2)),CONCAT('$ ', ROUND((p.total_drug_cost/p.total_day_supply),2)) as cost_per_day
+SELECT d.generic_name, 
+	CONCAT('$ ',ROUND(p.total_drug_cost,2)),
+	CONCAT('$ ', ROUND((p.total_drug_cost/p.total_day_supply),2)) 
+	as cost_per_day
 FROM drug as d
 INNER JOIN prescription as p
-USING(drug_name)
+	USING(drug_name)
 ORDER BY (total_drug_cost/total_day_supply) DESC;
 
 --	IMMUN GLOB(IGG)/GLY/IGA OVA50 at $7141.11 per day
@@ -124,32 +135,22 @@ ORDER BY drug_type
 
 SELECT 
 	CASE WHEN opioid_drug_flag = 'Y' OR long_acting_opioid_drug_flag = 'Y' THEN 'opioid'
-		WHEN antibiotic_drug_flag = 'Y' THEN 'antibiotic'
-		ELSE 'neither' END AS drug_type,
-	CONCAT('$ ', ROUND(SUM(p.total_drug_cost),2)) as total_cost
-FROM drug as d 
-INNER JOIN prescription as p
-USING(drug_name)
-GROUP BY drug_type
-ORDER BY SUM(p.total_drug_cost) DESC;
-
-SELECT 
-	CASE WHEN opioid_drug_flag = 'Y' OR long_acting_opioid_drug_flag = 'Y' THEN 'opioid'
 	WHEN antibiotic_drug_flag = 'Y' THEN 'antibiotic'
 	ELSE 'neither' END AS drug_type,
 		MONEY(ROUND(SUM(p.total_drug_cost),2)) as total_cost
 FROM drug as d 
 INNER JOIN prescription as p
 	USING(drug_name)
+WHERE opioid_drug_flag = 'Y' OR antibiotic_drug_flag = 'Y'
 GROUP BY drug_type
 ORDER BY SUM(p.total_drug_cost) DESC;
 
--- More spent on opioids. Go back and figure out how to eliminate 'neither'
+-- More spent on opioids. 
 
 -- 5. 
 --     a. How many CBSAs are in Tennessee? **Warning:** The cbsa table contains information for all states, not just Tennessee.
 
-SELECT f.state, count(c.cbsa)
+SELECT f.state, count(c.cbsa) as cbsa_count
 FROM fips_county as f
 INNER JOIN cbsa as c
 	USING (fipscounty)
@@ -167,6 +168,7 @@ LEFT JOIN fips_county as f
 LEFT JOIN population as p
 	USING (fipscounty)
 GROUP BY c.cbsaname
+HAVING SUM(p.population) IS NOT NULL
 ORDER BY total_pop DESC;
 
 
@@ -191,9 +193,9 @@ SELECT
 	CONCAT(f.county, ', ', f.state),
 	p.population
 FROM population as p
-LEFT JOIN cbsa as c
-	USING(fipscounty)
 LEFT JOIN fips_county as f
+	USING(fipscounty)
+LEFT JOIN cbsa as c
 	USING(fipscounty)
 WHERE c.fipscounty IS NULL
 ORDER BY p.population DESC
